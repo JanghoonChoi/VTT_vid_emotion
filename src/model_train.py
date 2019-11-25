@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import sys,os,time,cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,15 +6,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-torch.multiprocessing.set_sharing_strategy('file_system')
+#torch.multiprocessing.set_sharing_strategy('file_system')
 
-import ops, loss_def
-from resnet import resnet50
-from batch_AffectNet import AffectNet_dataset
+import ops
+from resnet import resnet18 as resnet
+from loss_def import emo_loss
 from batch_Friends import Friends_dataset
+from data_loader import Emotion_dataset
 from utils import get_dtstr
 
-if not ops.do_train:
+if not ops.train_mode:
     print 'not in training mode, exit'
     sys.exit()
     
@@ -30,11 +25,12 @@ if not ops.do_train:
 
 
 # define dataloader
-affectnet_dataset = AffectNet_dataset(ops.af_dict, ops)
-affectnet_loader = DataLoader(dataset=affectnet_dataset, batch_size=ops.batch_size, num_workers=4)
+emo_dataset = Emotion_dataset(ops)
+emo_loader = DataLoader(dataset=emo_dataset, batch_size=ops.batch_size, num_workers=8)
 
 # define resent
-net = resnet50().cuda()
+net = resnet().cuda()
+loss_eval = emo_loss(ops.loss_lambda).cuda()
 
 # define optim
 optim = torch.optim.Adam(net.parameters(), lr=ops.learning_rate, weight_decay=ops.w_decay, amsgrad=True)
@@ -108,7 +104,7 @@ print '> complete'
 
 tic = time.time()
 for epoch in range(ops.epoc_step):
-    for i, bat in enumerate(affectnet_loader, 0):
+    for i, bat in enumerate(emo_loader, 0):
         step = resume_step + epoch*ops.iter_step + i
 
         # bat = (img, emo)
@@ -122,7 +118,7 @@ for epoch in range(ops.epoc_step):
         net.train()
         bat_prd = net.forward(bat_img)
         # get loss
-        loss = loss_def.loss_total(bat_emo, bat_prd, ops.loss_lambda)
+        loss = loss_eval(bat_emo, bat_prd)
         
         # optim step
         learning_rate_use = ops.learning_rate
@@ -147,36 +143,37 @@ for epoch in range(ops.epoc_step):
                 val_i_img = torch.Tensor(val_img[val_i]).cuda()
                 val_i_emo = torch.Tensor(val_emo[val_i]).cuda()
                 # forward 
-                val_i_prd = net.forward(val_i_img)
+                with torch.no_grad():
+                    val_i_prd = net.forward(val_i_img)
                 # total loss/err 
-                val_i_err = loss_def.loss_total(val_i_emo, val_i_prd, ops.loss_lambda)
+                val_i_err = loss_eval(val_i_emo, val_i_prd)
                 # cumulate errors
                 valid_all[val_i] = val_i_err.detach().cpu().numpy()
-
                 # cumulate accuracy
                 val_i_emo_am = val_i_emo.argmax(dim=1)
                 val_i_prd_am = val_i_prd.argmax(dim=1)
-                val_i_acc = torch.sum(val_i_emo_am == val_i_prd_am) / float(ops.batch_size)
+                val_i_acc = torch.sum(val_i_emo_am == val_i_prd_am).type(torch.DoubleTensor) / float(ops.batch_size)
                 v_acc_all[val_i] = val_i_acc.detach().cpu().numpy()
 
             toc2 = time.time() - tic
             print " elaptime: " + str('%.6f'%toc2)
             print " valerror: " + str(valid_all.mean())
             print " accurate: " + str(v_acc_all.mean())
-
+            
         # error step
         if step % ops.errd_step == 0:
             net.eval()
             bat_prd = net.forward(bat_img)
-            loss = loss_def.loss_total(bat_emo, bat_prd, ops.loss_lambda)
+            loss = loss_eval(bat_emo, bat_prd)
             error = loss.detach().cpu().numpy()
+            accu = (torch.sum( bat_prd.argmax(dim=1) == bat_emo.argmax(dim=1) ).type(torch.DoubleTensor) / float(ops.batch_size)).detach().cpu().numpy()
 
-            print "step:" + str(step) + ', error: ' + str(error)
+            print "step:" + str(step) + ', error: ' + str(error) + ', accuracy: ' + str(accu)
             print '  lr: ' + str(learning_rate_use) + ', elaptime: ' + str('%.6f'%toc0) + ', ' + str('%.6f'%toc1)
 
             # open - write - close
             output_text = open("err_logs/log_"+ today_dt + ".txt","a")
-            output_text.write("%s, %s, %s, %s\n" % (step, error, valid_all.mean(), v_acc_all.mean()))
+            output_text.write("%s, %s, %s, %s, %s\n" % (step, error, accu, valid_all.mean(), v_acc_all.mean()))
             output_text.close()
             net.train()
 

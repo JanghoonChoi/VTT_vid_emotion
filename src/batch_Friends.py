@@ -29,7 +29,8 @@ class Friends_dataset(Dataset):
         else:
             # non neutral, choose again from 0~5
             emo = th_randint(0, 6)
-        
+#        emo = th_randint(0, 7)
+    
         # label vec
         batch_emo = np.zeros(7)
         batch_emo[emo] = 1

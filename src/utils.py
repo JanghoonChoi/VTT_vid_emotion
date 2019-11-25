@@ -49,9 +49,18 @@ def crop_img(I, x, y, w, h, center=False, mfill=False):
 
     # crop & append
     J = I[y_min:y_max+1, x_min:x_max+1, :]
+    
+    # 0 size errors
+    if J.shape[0] == 0 or J.shape[1] == 0:
+        plt.imsave('crop_error_'+time.strftime('%y%m%d_%H%M%S',time.localtime())+'.png', I)
+        print 'i: ',I.shape, (x,y,w,h),J.shape
+        print 'i: ',(y_min,y_max+1),(x_min,x_max+1)
+        # return black image for zero-dim images
+        return np.zeros([h,w,3])
+    
     if mfill:
-        rsel = np.linspace(0, J.shape[0], 10, endpoint=False, dtype=int)
-        csel = np.linspace(0, J.shape[1], 10, endpoint=False, dtype=int)
+        rsel = np.linspace(0, J.shape[0], 8, endpoint=False, dtype=int)
+        csel = np.linspace(0, J.shape[1], 8, endpoint=False, dtype=int)
         fill = np.mean(J[rsel][:,csel], axis=(0,1))
     else:
         fill = (0,0,0)
@@ -166,69 +175,6 @@ def down2n(x, n):
         return np.ceil(x/2.)
     else:
         return down2n(np.ceil(x/2.), n-1).astype(int)
-
-
-# def generate_anchors(bb_input, im_op, anc_changes):
-#     # bounding box (x_c, y_c, w, h) to anchor boxes (4, num_anc, map_sz, map_sz)
-#     # generate anchor boxes for every position, given bounding box dimensions
-#     num_anc = len(anc_changes)
-    
-#     bb_area  = 64*64 #bb_input[2]*bb_input[3]
-#     bb_ratio = 1.00  #bb_input[2]/bb_input[3]
-#     map_sz = im_op[1]-im_op[3]+1
-#     base_len = float(im_op[0])/float(im_op[1])
-
-#     batch_anc = np.zeros([4, num_anc, map_sz, map_sz])
-
-#     # xy center coordinates
-#     coor = (np.arange(map_sz)+(im_op[3]-1)/2.)*base_len
-#     coor_x = np.tile(coor.reshape((1,coor.size)), [map_sz,1])
-#     coor_y = np.tile(coor.reshape((coor.size,1)), [1,map_sz])
-#     coor_xy = np.stack((coor_x,coor_y), axis=0)
-#     batch_anc[0:2,:,:,:] = np.tile(coor_xy,[num_anc,1,1,1]).transpose(1,0,2,3)
-
-#     # wh sizes
-#     for i in range(num_anc):
-#         batch_anc[2,i,:,:] = np.sqrt(bb_area*(bb_ratio*anc_changes[i]))
-#         batch_anc[3,i,:,:] = np.sqrt(bb_area/(bb_ratio*anc_changes[i]))
-
-#     return batch_anc
-
-
-def generate_anchors_fix(bb_unit, im_op, anc_changes, anc_sizes):
-    # bounding box (x_c, y_c, w, h) to anchor boxes (4, num_anc, map_sz, map_sz)
-    # generate anchor boxes for every position, given bounding box dimensions
-    num_cng = len(anc_changes)
-    num_szs = len(anc_sizes)
-    num_anc = num_cng * num_szs
-    # op params
-    NUM_DOWNSAMPLE = im_op[2]
-    PATCH_SIZE = im_op[0]
-    PTMAP_SIZE = down2n(PATCH_SIZE, NUM_DOWNSAMPLE)
-    IMAGE_SIZE = im_op[1]
-    IMMAP_SIZE = down2n(IMAGE_SIZE, NUM_DOWNSAMPLE)
-    HTMAP_SIZE = IMMAP_SIZE - PTMAP_SIZE +1
-    
-    bb_area  = bb_unit**2 # area of unit box
-    map_sz = HTMAP_SIZE
-    base_len = float(IMAGE_SIZE)/float(IMMAP_SIZE)
-
-    batch_anc = np.zeros([4, num_anc, map_sz, map_sz])
-
-    # xy center coordinates (same for all types of anchors)
-    coor = (np.arange(map_sz)+(PTMAP_SIZE-1)/2.)*base_len
-    coor_x = np.tile(coor.reshape((1,coor.size)), [map_sz,1])
-    coor_y = np.tile(coor.reshape((coor.size,1)), [1,map_sz])
-    coor_xy = np.stack((coor_x,coor_y), axis=0)
-    batch_anc[0:2,:,:,:] = np.tile(coor_xy,[num_anc,1,1,1]).transpose(1,0,2,3)
-
-    # wh sizes
-    for i in range(num_szs):
-        for j in range(num_cng):
-            batch_anc[2,num_cng*i+j,:,:] = np.sqrt((bb_area*anc_sizes[i])*(anc_changes[j]))
-            batch_anc[3,num_cng*i+j,:,:] = np.sqrt((bb_area*anc_sizes[i])/(anc_changes[j]))
-
-    return batch_anc
 
 
 def emo2txt(emo):
