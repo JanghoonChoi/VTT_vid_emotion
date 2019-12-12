@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
@@ -207,7 +207,7 @@ class ResNet(nn.Module):
         x = self.avgpool(x4)
         x = torch.flatten(x, 1)
         x = self.fc(x)
-
+        
         return x #,(x1,x2,x3,x4)
 
     # Allow for accessing forward method in a inherited class

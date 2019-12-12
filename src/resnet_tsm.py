@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152', 'resnext50_32x4d', 'resnext101_32x8d',
@@ -168,6 +168,27 @@ class ResNet(nn.Module):
                     nn.init.constant_(m.bn3.weight, 0)
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
+                    
+                    
+                    
+    def temp_shift(self, x0, n_B, n_T, fold_div, fill_zero=False):
+        # reshape
+        x = x0.view(n_B, n_T, x0.shape[1], x0.shape[2], x0.shape[3])
+        x = x.clone()
+        # channel dim
+        n_C = x.shape[2]
+        # calc fold
+        fold = n_C // fold_div
+        # shift left (+ fill zero)
+        idx = [0] + range(n_T-1)
+        x[:,:,:fold,:] = x[:,idx,:fold,:]
+        if fill_zero:
+            x[:,0,:fold,:] = 0.
+        # reshape
+        x = x.flatten(0,1)
+        
+        return x
+
 
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         norm_layer = self._norm_layer
@@ -194,21 +215,32 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def _forward(self, x):
+        # assume input x dims [N, T, C, H, W]
+        n_B = x.shape[0]
+        n_T = x.shape[1]
+        n_F = 4
+        
+        x = x.flatten(0,1) # [NT, C, H, W]
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
 
-        x1 = self.layer1(x)
-        x2 = self.layer2(x1)
-        x3 = self.layer3(x2)
-        x4 = self.layer4(x3)
+        # [reshape - channel shift - forward - flatten]
+        x = self.layer1(x)
+        x = self.temp_shift(x, n_B, n_T, n_F)
+        x = self.layer2(x)
+        x = self.temp_shift(x, n_B, n_T, n_F)
+        x = self.layer3(x)
+        x = self.temp_shift(x, n_B, n_T, n_F)
+        x = self.layer4(x)
 
-        x = self.avgpool(x4)
+        x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
+        x = x.view(n_B, n_T, -1)
 
-        return x #,(x1,x2,x3,x4)
+        return x 
 
     # Allow for accessing forward method in a inherited class
     forward = _forward
