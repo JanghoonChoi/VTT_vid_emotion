@@ -1,6 +1,6 @@
 # VTT video emotion recognition
 
-Video Emotion Recognition for VTT Friends dataset, trained with CK+ emotion labeled videos and AffectNet dataset
+Video Emotion Recognition for VTT Friends dataset, trained with RAF dataset and AffectNet dataset
 
 ![Alt text](example.png)
 
@@ -8,32 +8,32 @@ Video Emotion Recognition for VTT Friends dataset, trained with CK+ emotion labe
 
 ### Preliminaries
 #### Packages
-* python2
-* tensorflow-gpu
-* numpy
-* opencv-python
-* matplotlib
-* face_recognition
+* python==2.7.1
+* pytorch==1.3.0
+* numpy==1.16.5
+* opencv-python==4.1.0
+* matplotlib==2.2.4
+* face_recognition==1.2.3
 
 #### Datasets
 * AffectNet dataset [#](http://mohammadmahoor.com/affectnet/)
-* Cohn-Kanade (CK+) dataset [#](http://www.consortium.ri.cmu.edu/ckagree/)
+* RAF dataset [#](http://www.whdeng.cn/RAF/model1.html)
 * VTT Friends dataset
 
 #### Preprocessing
-* Parsed AffectNet dataset can be indexed by loading and using `affectnet_parsed.npy` file
+* Parsed AffectNet dataset can be preprocessed by using `parse_AffectNet.py` script
     * Parsed AffectNet dictionary has a categorical structure of [af_dict] -> [emotion label] -> [example index] -> ['img':image filenames], ['gt':ground truth bounding boxes], ['emo':emotion labels], ['aro':arousal intensity]
-* CK+ dataset must be preprocessed using `face_recognition` package to find the face region of the subject, as shown in `ckplus_img_parse.ipynb`
-* Parsed CK+ dataset can be indexed by loading and using `ckplus_parsed.npy` file
-    * Parsed CK+ dictionary has the structure of [ck_dict] -> [subject number] -> [sequence index] -> ['img':image filename], ['emo':emotion label]
+* Parsed RAF dataset can be preprocessed by using `parse_RAF.py` script
+    * Parsed RAF dictionary has a categorical structure of [raf_dict] -> [example index] -> ['img':image filenames], ['gt':ground truth bounding boxes], ['em':emotion labels]
+    
 * VTT Friends dataset (episode 1-10) is used as the validation set
-    * All frames of the videos should be extracted and saved as image files as in `vid_frame_parse.ipynb`
-    * Metadata (json) files are used for processing as in `vid_metadata_parse.ipynb` to extract facial region images and emotion labels
-    * The dataset can be indexed using `friends_valid.npy`, with the structure of [val_dict] -> [emotion label] -> [episode index] -> [period_character] -> [image filename list]
+    * All frames of the videos should be extracted and saved as image files as in `extract_friends.py`
+    * Metadata (json) files are used for processing as in `parse_friends_new.ipynb` to extract facial region images and emotion labels
+    * The dataset can be indexed using `friends_parsed_new.npy`, with the structure of [val_dict] -> [emotion label] -> [example index] -> ['img':image filenames], ['pos':episode num, character id], ['emo':emotion label]
 
 
 ### Train
-`model_train.py` is training script where directory path variables `DB_PATH` and `VA_PATH` should be the path for AffectNet dataset and VTT_friends dataset respectively. Training can be performed by running
+`model_train.py` and `model_tsm_train.py` are training script where training variables are configured in `ops.py`. Training can be performed by running
 ```
 python model_train.py
 ```
@@ -45,19 +45,14 @@ python plot_errval.py
 ### Test
 Testing for a video frame can be performed by importing the network model function by,
 ```
-from model_forward import vid_emo_model
+from resnet_tsm import resnet18 as resnet
 ```
-where the model function is vid_emo_model(input_img, op), input_img is the cropped RGB face image (224x224x3) and op is the network parameters defined as `net_params` in `model_train.py`
+where the model function is resnet(input_img), input_img is cropped RGB face sequence image (4x3x224x224), where 4 is the buffer size for video sequence.
 
 #### Results
-Results for VTT_friends dataset is stored in `output_emotion.json` as,
+Results for VTT_friends dataset can be obtained using `create_data.ipynb` and stored as in `friends_s01_ep00.json` as,
 ```
-{
-    "episode_number": {
-        "clipno_frameno": {
-            "character": {
-                "emotion": "emotion_label"
-            }, 
+{"type": "emotion", "class": "happy", "seconds": 15.0, "object": Object}, 
 ...
 ```
 
@@ -70,6 +65,9 @@ Results for VTT_friends dataset is stored in `output_emotion.json` as,
 
 * AffectNet dataset
     - Ali Mollahosseini, Behzad Hasani, and Mohammad H. Mahoor, “AffectNet: A New Database for Facial Expression, Valence, and Arousal Computation in the Wild”, IEEE Transactions on Affective Computing, 2017.
+    
+* RAF dataset
+    - Li, Shan and Deng, Weihong and Du, JunPing, "Reliable Crowdsourcing and Deep Locality-Preserving Learning for Expression Recognition in the Wild", CVPR 2017
 
 #### Acknowledgements
 
